@@ -3,7 +3,7 @@
 CLANG_DIR=~/clang/bin/clang
 
 if [ ! -f out/.config ]; then
-	make ARCH=arm64 O=out vendor/kishi-perf_defconfig
+	make ARCH=arm64 O=out kishi_defconfig
 else
 	make ARCH=arm64 O=out oldconfig
 fi
