@@ -1,47 +1,26 @@
-#!/usr/bin/fish
+#!/bin/bash
 
-set PATH $HOME/tc/proton-clang/bin $PATH
-export KBUILD_BUILD_HOST="notkernel"
-export KBUILD_BUILD_USER="Panda"
+CLANG_DIR=~/clang/bin/clang
 
-# Push kernel to channel
-function push
-    cd AnyKernel3
-    set ZIP (echo *.zip)
-    curl -F document=@$ZIP "https://api.telegram.org/bot$token/sendDocument" \
-        -F chat_id="$chat_id"
-end
+if [ ! -f out/.config ]; then
+	make ARCH=arm64 O=out vendor/kishi-perf_defconfig
+else
+	make ARCH=arm64 O=out oldconfig
+fi
 
-# Fin Error
-function finerr
-    curl -s -X POST "https://api.telegram.org/bot$token/sendMessage" \
-        -d chat_id="$chat_id" \
-        -d "disable_web_page_preview=true" \
-        -d "parse_mode=markdown" \
-        -d text="Build throw an error(s)"
-    exit 1
-end
+export KBUILD_COMPILER_STRING=$($CLANG_DIR --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//')
 
-# Compile plox
-function compile
-    make O=out ARCH=arm64 vendor/kishi-perf_defconfig
-    make -j(nproc --all) O=out ARCH=arm64 CC=clang AR=llvm-ar NM=llvm-nm \
-        OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
-        CROSS_COMPILE=aarch64-linux-gnu- \
-        CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-        Image.gz-dtb
+make -j8 ARCH=arm64 O=out \
+	CC=$CLANG_DIR CLANG_TRIPLE=aarch64-linux-gnu- \
+	CROSS_COMPILE=~/gcc-7.4.1/bin/aarch64-linux-gnu- \
+	Image.gz-dtb
 
-    if test $status -eq 0
-        cd AnyKernel3
-        make clean
-        cp ../out/arch/arm64/boot/Image.gz-dtb .
-        make notkernel
-        cp NotKernel*.zip ~/upload
-        cd ..
-     else
-        finerr
-     end
-end
+IMAGE="out/arch/arm64/boot/Image.gz-dtb"
 
-compile
-push
+if [[ -f "$IMAGE" ]]; then
+	rm AnyKernel3/Image.gz-dtb > /dev/null 2>&1
+	rm AnyKernel3/*.zip > /dev/null 2>&1
+	cp $IMAGE AnyKernel3/Image.gz-dtb
+	cd AnyKernel3
+	zip -r release.zip .
+fi
